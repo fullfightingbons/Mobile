@@ -2,10 +2,19 @@ package fr.americanfullfightingbons.gestion;
 
 import android.os.Bundle;
 import android.webkit.WebView;
+import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
 
 public class MainActivity extends BridgeActivity {
+
+    // Petit script pour masquer le splash natif manuellement (voir
+    // launchAutoHide: false dans capacitor.config.ts) une fois la page
+    // effectivement chargée — plutôt qu'un minuteur fixe qui risquerait de
+    // découvrir une page à moitié chargée sur une connexion lente.
+    private static final String HIDE_SPLASH_JS =
+        "window.Capacitor && window.Capacitor.Plugins.SplashScreen && " +
+        "window.Capacitor.Plugins.SplashScreen.hide();";
 
     // Pont natif pour les exports CSV/PDF/JSON de l'app de gestion : voir
     // native-notes/export-bridge.js pour le détail et le pourquoi. Injecté
@@ -82,6 +91,29 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageLoaded(WebView webView) {
                 webView.evaluateJavascript(EXPORT_BRIDGE_JS, null);
+                webView.evaluateJavascript(HIDE_SPLASH_JS, null);
+            }
+        });
+
+        // Bouton retour matériel/geste Android : par défaut (voir
+        // App.disableBackButtonHandler dans capacitor.config.ts, qui
+        // désactive le handler standard du plugin App), un appui sur
+        // retour à la racine de l'app ne faisait rien du tout — le handler
+        // du plugin App consomme l'événement même quand la webview n'a pas
+        // d'historique. Ici : on recule dans l'historique de la webview
+        // (entre les modules Adhérents / Présences / Matériel / Profil)
+        // s'il y en a un, sinon on met l'app en arrière-plan comme une app
+        // Android classique (pas de finish(), pour garder la session et
+        // éviter un rechargement complet à la réouverture).
+        this.getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                WebView webView = bridge.getWebView();
+                if (webView != null && webView.canGoBack()) {
+                    webView.goBack();
+                } else {
+                    moveTaskToBack(true);
+                }
             }
         });
     }

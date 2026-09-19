@@ -8,11 +8,12 @@
 		"allowNavigation": [
 			"*.americanfullfightingbons.fr",
 			"americanfullfightingbons.fr"
-		]
+		],
+		"errorPath": "offline.html"
 	},
 	"plugins": {
 		"SplashScreen": {
-			"launchShowDuration": 800,
+			"launchAutoHide": false,
 			"backgroundColor": "#07111dff",
 			"androidSplashResourceName": "splash",
 			"androidScaleType": "CENTER_CROP",
@@ -25,8 +26,21 @@
 			"backgroundColor": "#07111d",
 			"overlaysWebView": false
 		},
+		"SystemBars": {
+			"style": "DARK",
+			"insetsHandling": "disable"
+		},
+		"EdgeToEdge": {
+			"backgroundColor": "#07111d",
+			"statusBarColor": "#07111d",
+			"navigationBarColor": "#07111d"
+		},
 		"Keyboard": {
-			"resize": "body"
+			"resize": "body",
+			"resizeOnFullScreen": false
+		},
+		"App": {
+			"disableBackButtonHandler": true
 		}
 	},
 	"android": {

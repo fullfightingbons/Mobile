@@ -1,0 +1,88 @@
+name: Build Android APK
+
+# Se déclenche à chaque push sur main, et peut aussi être lancé à la main
+# depuis l'onglet "Actions" du dépôt GitHub (bouton "Run workflow").
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # nécessaire pour publier la Release GitHub avec l'APK
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Installer les dépendances npm
+        run: npm ci
+
+      - name: Installer le JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: gradle
+
+      # Sécurité : recopie la config/plugins Capacitor dans android/, au cas
+      # où capacitor.config.ts aurait changé sans qu'un `npx cap sync` local
+      # ait été relancé avant de pousser.
+      - name: Synchroniser Capacitor → Android
+        run: npx cap sync android
+
+      - name: Autoriser l'exécution de gradlew
+        run: chmod +x android/gradlew
+
+      # Si les 4 Secrets de signature (voir README) sont configurés sur le
+      # dépôt, on écrit le keystore sur le disque du runner (jamais commité)
+      # et on expose son chemin/mots de passe en variables d'environnement
+      # pour l'étape suivante. Sans Secrets configurés, l'APK est simplement
+      # généré non signé — pratique pour vérifier que tout compile avant de
+      # mettre en place la signature.
+      - name: Préparer le keystore de signature (si configuré)
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/release.keystore
+            echo "ANDROID_KEYSTORE_PATH=release.keystore" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Pas de Secrets de signature configurés — l'APK sera généré NON signé (voir README, section GitHub Actions)."
+          fi
+
+      - name: Compiler l'APK (release)
+        working-directory: android
+        env:
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+          ANDROID_VERSION_NAME: "1.0.${{ github.run_number }}"
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Publier l'APK comme fichier téléchargeable du build
+        uses: actions/upload-artifact@v4
+        with:
+          name: affbc-gestion-${{ github.run_number }}
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 90
+
+      # En plus de l'artefact ci-dessus (qui demande d'être connecté à
+      # GitHub pour le télécharger), on publie une Release avec un lien
+      # direct vers l'APK — plus simple à partager aux membres du bureau.
+      - name: Publier une Release GitHub avec l'APK
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "build-${{ github.run_number }}" \
+            android/app/build/outputs/apk/release/*.apk \
+            --title "AFFBC Gestion — build ${{ github.run_number }}" \
+            --notes "Build automatique depuis le commit ${{ github.sha }}."

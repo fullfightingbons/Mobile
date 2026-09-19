@@ -147,6 +147,44 @@ voulez.
   fichiers dans `android/` ou `capacitor.config.ts`, commit + push — la CI
   reconstruit et republie automatiquement.
 
+## Rendu mobile : ce qui a été amélioré
+
+Quatre ajustements pour que la coque se comporte comme une vraie app native
+plutôt qu'un onglet de navigateur, sans toucher au site distant :
+
+- **Barres système (Android 16)** : `targetSdkVersion` est à 36, et sur
+  Android 16 l'edge-to-edge est désormais imposé par le système — les
+  anciennes options `StatusBar.overlaysWebView` / `backgroundColor` n'ont
+  plus aucun effet (limite du système, pas un bug de config). Sans
+  correctif, le contenu du site passerait sous la barre de statut et la
+  barre de navigation. Le plugin `@capawesome/capacitor-android-edge-to-edge-support`
+  (voir `capacitor.config.ts`, bloc `EdgeToEdge`) restaure le comportement
+  traditionnel en appliquant les marges de sécurité directement à la
+  webview — rien à changer côté site.
+- **Splash → contenu** : le splash se masque désormais quand la page a
+  réellement fini de charger (`SplashScreen.hide()`, déclenché depuis
+  `MainActivity.java`), plutôt qu'après un minuteur fixe de 800ms qui
+  pouvait découvrir une page à moitié chargée sur une connexion lente.
+- **Page hors-ligne** (`www/offline.html`) : si le chargement de
+  `gestion.americanfullfightingbons.fr` échoue (pas de réseau, serveur
+  injoignable), l'app affiche une page locale sobre avec un bouton
+  "Réessayer", à la place de la page d'erreur brute de Chrome.
+- **Bouton retour Android** : auparavant, un appui sur retour à l'écran
+  d'accueil de l'app ne faisait rien (comportement par défaut, trompeur,
+  du plugin `@capacitor/app`). Il navigue maintenant dans l'historique de
+  la webview entre les modules, et met l'app en arrière-plan (pas
+  `finish()`, pour garder la session) une fois à la racine.
+
+**À tester en priorité sur le premier APK reconstruit avec ces
+changements** (comme pour le pont d'export, ça n'a pas pu être vérifié sur
+un appareil réel faute d'environnement de test ici) : barres système sur
+un téléphone Android 15/16, écran hors-ligne en coupant le réseau, et
+bouton retour à la racine puis dans un module.
+
+La mise en page interne des écrans (espacement, taille des zones
+tactiles, tableaux) dépend du CSS du site `gestion.americanfullfightingbons.fr`
+lui-même, pas de cette coque — un chantier séparé, côté Worker.
+
 ## Limites connues
 
 - Pas de notifications push pour l'instant (possible plus tard, demande
